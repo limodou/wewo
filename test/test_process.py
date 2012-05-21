@@ -22,10 +22,10 @@ if __name__ == '__main__':
     
     class ReviewApplication(Application):
         def start(self, workitem):
-            workitem.finish(True)
+            workitem.finish()
         
         def finish(self, workitem):
-            return True
+            return False
         
     class MyProcess(Process):
         author = Activity()

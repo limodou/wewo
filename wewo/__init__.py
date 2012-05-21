@@ -12,6 +12,10 @@ __all__ = ['Activity', 'Transition', 'BasicProcessEngine', 'Process',
 
 log = logging.getLogger('wewo')
 
+READY = -1
+RUNNING = 0
+FINISHED = 1
+
 class Error(Exception): pass
 __default_workitems_queue__ = None
 
@@ -102,12 +106,19 @@ class WorkItem(StorageMixin):
             self.process.event.emit(event)
             self.finish()
             
-    def finish(self, data=None):
+    def finish(self):
+        self.status = FINISHED
+            
+    def do_finish(self):
         self.status = 1
         self.finish_time = now()
+        result = None
+        if self.activity.application:
+            result = self.activity.application.finish(self)
         event = Event('WorkItemFinished', self)
         self.process.event.emit(event)
-        self.process.put(self, data)
+        return result
+#        self.process.put(self, data)
         
     def serial(self):
         return {'process':self.process.id, 'activity':self.activity.name, 
@@ -190,12 +201,16 @@ class BasicProcessEngine(threading.Thread):
                 time.sleep(0.1)
         
     def do(self, workitem, data=None):
-        if workitem.status == -1:
+        if workitem.status == READY:
             workitem.start()
-#            if workitem.status == 1:
-#                self.put(workitem)
-        elif workitem.status == 1:
-            workitem.process.do_transition(workitem, data)
+            if workitem.status == FINISHED:
+                #self.put(workitem)
+                workitem.process.put(workitem)
+        elif workitem.status == FINISHED:
+            data = workitem.do_finish()
+            w = workitem.process.do_transition(workitem, data)
+            if w:
+                w.process.put(w)
             
 class ProcessMetaClass(type):
     def __init__(cls, name, bases, dct):
@@ -314,7 +329,9 @@ class Process(StorageMixin):
         
         event = Event('ProcessStarted', self)
         self.event.emit(event)
-        self.do_transition(None)
+        w = self.do_transition(None)
+        if w:
+            self.put(w)
         
     def finish(self):
         self.status = 1
@@ -352,7 +369,8 @@ class Process(StorageMixin):
                 event = Event('Transition', x)
                 self.event.emit(event)
                 w = self.create_workitem(x.to_)
-                self.put(w)
+                return w
+                #self.put(w)
                 found = True
                 break
 
