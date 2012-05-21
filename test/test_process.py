@@ -19,17 +19,35 @@ def test_basic():
     """
     
 if __name__ == '__main__':
+    
+    class ReviewApplication(Application):
+        def start(self, workitem):
+            workitem.finish(True)
+        
+        def finish(self, workitem):
+            return True
+        
     class MyProcess(Process):
         author = Activity()
-        review = Activity()
+        review = Activity(application=ReviewApplication())
         publish = Activity()
         reject = Activity()
-        Transitions = [('author', 'review'), ('review', 'publish'),
-            ('review', 'reject')]
+        Transitions = [('author', 'review'), ('review', 'publish', lambda data:data),
+            ('review', 'reject', lambda data: not data)]
     
     def log(event):
         print event
         
-    p = MyProcess('sample')
+    queue = get_default_workitems_queue()
+    engine = BasicProcessEngine(queue)
+    engine.start()
+    
+#    def put_callback(run=run):
+#        run.send(None)
+#    queue.set_callback('put', put_callback)
+    
+    p = MyProcess(queue)
     p.event.connect(log)
     p.start()
+    
+    engine.join()
